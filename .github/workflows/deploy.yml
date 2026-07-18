@@ -13,7 +13,6 @@ env:
   AWS_REGION: us-east-1
   S3_BUCKET: my-cost-dashboard-doreen
   CLOUDFRONT_DISTRIBUTION_ID: E14QLWLEL8EN0K
-  LAMBDA_FUNCTION_NAME: FinOpsDailyCostCollector
 
 jobs:
   deploy-dashboard:
@@ -40,27 +39,3 @@ jobs:
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/dashboard.html"
-
-  deploy-lambda:
-    name: Deploy Lambda function code
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Assume AWS role via OIDC
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: arn:aws:iam::382975714531:role/github-actions-finops-deploy
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Zip Lambda code
-        run: |
-          cd lambda
-          zip -r ../function.zip lambda_function.py
-
-      - name: Update Lambda function code
-        run: |
-          aws lambda update-function-code \
-            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://function.zip
