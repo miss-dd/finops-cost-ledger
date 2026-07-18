@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>FinOps Cost Ledger (Doreen) — AWS Billing Dashboard</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" integrity="sha512-ZnR2wlLbSbr8/c9AgRg3XyiqbkN1Z/3qqN7CP5y7sirfYMKFMeXFMSv9bQ4cGOkFkLMhy7yB8bJi3gWoHqACg==" crossorigin="anonymous"></script>
+<script src="chart.umd.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -322,7 +322,7 @@
 
   <div class="panel">
     <h2>Spend calendar</h2>
-    <p class="desc">Every square is one day of billing,  darker means more expensive. Read it left to right, like a receipt.</p>
+    <p class="desc">Every square is one day of billing — darker means more expensive. Read it left to right, like a receipt.</p>
     <div id="calendar"></div>
     <div class="legend">
       <span>Less</span>

@@ -28,14 +28,17 @@ jobs:
           role-to-assume: arn:aws:iam::382975714531:role/github-actions-finops-deploy
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Upload dashboard.html to S3
+      - name: Upload dashboard files to S3
         run: |
           aws s3 cp dashboard/dashboard.html s3://${{ env.S3_BUCKET }}/dashboard.html \
             --content-type "text/html" \
             --cache-control "max-age=60"
+          aws s3 cp dashboard/chart.umd.js s3://${{ env.S3_BUCKET }}/chart.umd.js \
+            --content-type "application/javascript" \
+            --cache-control "max-age=31536000, immutable"
 
       - name: Invalidate CloudFront cache
         run: |
           aws cloudfront create-invalidation \
             --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/dashboard.html"
+            --paths "/dashboard.html" "/chart.umd.js"
