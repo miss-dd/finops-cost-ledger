@@ -23,6 +23,7 @@ jobs:
   deploy-dashboard:
     name: Deploy dashboard to S3 + invalidate CloudFront
     runs-on: ubuntu-latest
+    if: contains(toJson(github.event.commits.*.modified), 'dashboard/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -48,6 +49,7 @@ jobs:
   deploy-lambda:
     name: Deploy Lambda function code
     runs-on: ubuntu-latest
+    if: contains(toJson(github.event.commits.*.modified), 'lambda/')
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
