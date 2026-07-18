@@ -1,0 +1,70 @@
+name: Deploy FinOps Cost Ledger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "dashboard/**"
+      - "lambda/**"
+      - ".github/workflows/deploy.yml"
+
+# Required so GitHub can mint the OIDC token this workflow uses to authenticate to AWS
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  S3_BUCKET: my-cost-dashboard-doreen
+  CLOUDFRONT_DISTRIBUTION_ID: E14QLWLEL8EN0K
+  LAMBDA_FUNCTION_NAME: FinOpsDailyCostCollector
+
+jobs:
+  deploy-dashboard:
+    name: Deploy dashboard to S3 + invalidate CloudFront
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Assume AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::382975714531:role/github-actions-finops-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload dashboard.html to S3
+        run: |
+          aws s3 cp dashboard/dashboard.html s3://${{ env.S3_BUCKET }}/dashboard.html \
+            --content-type "text/html" \
+            --cache-control "max-age=60"
+
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ env.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/dashboard.html"
+
+  deploy-lambda:
+    name: Deploy Lambda function code
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Assume AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::382975714531:role/github-actions-finops-deploy
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Zip Lambda code
+        run: |
+          cd lambda
+          zip -r ../function.zip lambda_function.py
+
+      - name: Update Lambda function code
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ env.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://function.zip
