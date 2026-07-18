@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FinOps Cost Ledger (Doreen) — AWS Billing Dashboard</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B1220;
+    --panel:#121B2E;
+    --panel-2:#17223A;
+    --border:#22304B;
+    --paper:#EDEFF3;
+    --muted:#8A93A6;
+    --amber:#E8A33D;
+    --teal:#3DDC97;
+    --danger:#E8573D;
+    --radius:14px;
+    --shadow: 0 18px 40px -20px rgba(0,0,0,0.55);
+  }
+  html[data-theme="light"]{
+    --bg:#F3F5F9;
+    --panel:#FFFFFF;
+    --panel-2:#EEF1F6;
+    --border:#E1E6EE;
+    --paper:#141A2B;
+    --muted:#65708A;
+    --amber:#C77E1F;
+    --teal:#0FA875;
+    --danger:#D14A32;
+    --shadow: 0 18px 34px -22px rgba(20,26,43,0.22);
+  }
+  *{box-sizing:border-box;}
+  html{transition:background 0.35s ease;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1200px 600px at 10% -10%, rgba(232,163,61,0.06), transparent),
+      radial-gradient(1000px 500px at 90% 0%, rgba(61,220,151,0.05), transparent),
+      var(--bg);
+    color:var(--paper);
+    font-family:'Inter',sans-serif;
+    padding:40px 24px 80px;
+    transition:background 0.35s ease, color 0.35s ease;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  /* ---- Header / receipt strip ---- */
+  header{
+    position:relative;
+    padding:32px 32px 28px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    margin-bottom:22px;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute; top:0; left:0; right:0; height:4px;
+    background:repeating-linear-gradient(90deg, var(--amber) 0 10px, transparent 10px 20px);
+    opacity:0.55;
+  }
+  .header-top{display:flex; justify-content:space-between; align-items:flex-start; gap:20px;}
+  .eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    color:var(--amber);
+    display:flex; align-items:center; gap:8px;
+  }
+  .eyebrow .dot{width:7px;height:7px;border-radius:50%;background:var(--teal);box-shadow:0 0 0 3px rgba(61,220,151,0.15);}
+  h1{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:clamp(28px,4vw,40px);
+    margin:10px 0 8px;
+    font-weight:700;
+    letter-spacing:-0.01em;
+  }
+  h1 .who{
+    font-size:0.42em;
+    font-weight:500;
+    color:var(--muted);
+    letter-spacing:0;
+    margin-left:2px;
+  }
+  header p{
+    color:var(--muted);
+    max-width:640px;
+    line-height:1.55;
+    margin:0;
+    font-size:15px;
+  }
+  #status{
+    margin-top:16px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--muted);
+  }
+
+  /* ---- Theme toggle ---- */
+  #themeToggle{
+    flex-shrink:0;
+    display:flex; align-items:center; gap:9px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-radius:999px;
+    padding:6px 8px 6px 12px;
+    cursor:pointer;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--muted);
+    letter-spacing:.05em;
+    text-transform:uppercase;
+    transition:border-color 0.2s ease;
+  }
+  #themeToggle:hover{border-color:var(--amber);}
+  .switch-track{
+    width:34px;height:18px;border-radius:999px;
+    background:var(--border);
+    position:relative;
+    transition:background 0.25s ease;
+  }
+  .switch-thumb{
+    position:absolute; top:2px; left:2px;
+    width:14px;height:14px;border-radius:50%;
+    background:var(--amber);
+    transition:left 0.25s ease, background 0.25s ease;
+  }
+  html[data-theme="light"] .switch-thumb{left:18px; background:#C77E1F;}
+
+  /* ---- KPI row ---- */
+  .kpis{
+    display:grid;
+    grid-template-columns:repeat(4,1fr);
+    gap:16px;
+    margin-bottom:22px;
+  }
+  .kpi{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:20px;
+    transition:transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  }
+  .kpi:hover{
+    transform:translateY(-5px);
+    box-shadow:var(--shadow);
+    border-color:var(--amber);
+  }
+  .kpi .label{
+    font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em;
+    font-family:'IBM Plex Mono',monospace;
+    margin-bottom:10px;
+  }
+  .kpi .value{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:26px;
+    font-weight:600;
+  }
+  .kpi .sub{font-size:12px;color:var(--muted);margin-top:6px;}
+  .kpi.accent .value{color:var(--amber);}
+  .kpi.good .value{color:var(--teal);}
+
+  /* ---- Panels ---- */
+  .panel{
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:var(--radius);
+    padding:24px;
+    margin-bottom:22px;
+    transition:transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+  }
+  .panel:hover{
+    transform:translateY(-3px);
+    box-shadow:var(--shadow);
+  }
+  .panel h2{
+    font-family:'Space Grotesk',sans-serif;
+    font-size:18px;
+    margin:0 0 4px;
+    font-weight:600;
+  }
+  .panel .desc{color:var(--muted);font-size:13px;margin:0 0 18px;}
+  .chart-box{position:relative;height:280px;}
+
+  /* ---- Recommendations ---- */
+  .recs{display:grid; grid-template-columns:repeat(2,1fr); gap:14px;}
+  .rec-card{
+    background:var(--panel-2);
+    border:1px solid var(--border);
+    border-left:3px solid var(--muted);
+    border-radius:10px;
+    padding:16px 18px;
+    transition:transform 0.2s ease, box-shadow 0.2s ease, border-left-color 0.2s ease;
+  }
+  .rec-card:hover{
+    transform:translateY(-4px) translateX(2px);
+    box-shadow:var(--shadow);
+  }
+  .rec-card.warning{border-left-color:var(--danger);}
+  .rec-card.good{border-left-color:var(--teal);}
+  .rec-card.tip{border-left-color:var(--amber);}
+  .rec-card.info{border-left-color:#5B8DEF;}
+  .rec-tag{
+    display:inline-block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--muted);
+    margin-bottom:8px;
+  }
+  .rec-card.warning .rec-tag{color:var(--danger);}
+  .rec-card.good .rec-tag{color:var(--teal);}
+  .rec-card.tip .rec-tag{color:var(--amber);}
+  .rec-card.info .rec-tag{color:#5B8DEF;}
+  .rec-title{font-weight:600;font-size:14px;margin-bottom:5px;}
+  .rec-desc{font-size:13px;color:var(--muted);line-height:1.5;}
+  @media (max-width:860px){ .recs{grid-template-columns:1fr;} }
+
+  .grid-2{display:grid;grid-template-columns:1.3fr 1fr;gap:22px;}
+
+  /* ---- Spend calendar (signature element) ---- */
+  #calendar{
+    display:grid;
+    grid-auto-flow:column;
+    grid-template-rows:repeat(7,14px);
+    gap:4px;
+    overflow-x:auto;
+    padding-bottom:6px;
+  }
+  .cell{
+    width:14px;height:14px;border-radius:3px;
+    background:var(--panel-2);
+    border:1px solid var(--border);
+  }
+  .legend{display:flex;align-items:center;gap:6px;margin-top:14px;font-size:11px;color:var(--muted);font-family:'IBM Plex Mono',monospace;}
+  .legend .cell{width:11px;height:11px;}
+
+  /* ---- Service list ---- */
+  .svc-row{
+    display:flex; align-items:center; gap:12px;
+    padding:10px 0;
+    border-bottom:1px solid var(--border);
+    font-size:13px;
+  }
+  .svc-row:last-child{border-bottom:none;}
+  .svc-name{width:150px;flex-shrink:0;color:var(--paper);}
+  .svc-bar-track{flex:1;height:8px;background:var(--panel-2);border-radius:4px;overflow:hidden;}
+  .svc-bar-fill{height:100%;background:linear-gradient(90deg,var(--amber),#f2c574);border-radius:4px;}
+  .svc-amt{width:70px;text-align:right;font-family:'IBM Plex Mono',monospace;color:var(--muted);flex-shrink:0;}
+
+  footer{
+    color:var(--muted);
+    font-size:12px;
+    line-height:1.7;
+    padding:20px 4px 0;
+    font-family:'IBM Plex Mono',monospace;
+  }
+  footer b{color:var(--paper);}
+
+  @media (max-width:860px){
+    .kpis{grid-template-columns:repeat(2,1fr);}
+    .grid-2{grid-template-columns:1fr;}
+  }
+  @media (prefers-reduced-motion: reduce){ *{transition:none !important;} }
+
+  a, a:visited{color:var(--teal);}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="header-top">
+      <div>
+        <div class="eyebrow"><span class="dot"></span>AWS BILLING &amp; USAGE · LIVE</div>
+        <h1>FinOps Cost Ledger <span class="who">(Doreen)</span></h1>
+        <p>A day-by-day record of what this AWS account is spending and where — built so a non-technical stakeholder can glance at it and know exactly what's driving the bill, no console login required.</p>
+      </div>
+      <button id="themeToggle" aria-label="Toggle light and dark mode">
+        <span id="themeLabel">Dark</span>
+        <span class="switch-track"><span class="switch-thumb"></span></span>
+      </button>
+    </div>
+    <div id="status">Loading ledger…</div>
+  </header>
+
+  <div class="kpis">
+    <div class="kpi accent">
+      <div class="label">Total spend (period)</div>
+      <div class="value" id="kpi-total">—</div>
+      <div class="sub" id="kpi-range">—</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Daily average</div>
+      <div class="value" id="kpi-avg">—</div>
+      <div class="sub">per day, all services</div>
+    </div>
+    <div class="kpi">
+      <div class="label">Highest cost day</div>
+      <div class="value" id="kpi-peak">—</div>
+      <div class="sub" id="kpi-peak-date">—</div>
+    </div>
+    <div class="kpi good">
+      <div class="label">Top service</div>
+      <div class="value" id="kpi-top-svc">—</div>
+      <div class="sub" id="kpi-top-svc-pct">—</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Daily spend trend</h2>
+    <p class="desc">Total cost across all services, per day.</p>
+    <div class="chart-box"><canvas id="trendChart"></canvas></div>
+  </div>
+
+  <div class="panel">
+    <h2>Spend calendar</h2>
+    <p class="desc">Every square is one day of billing — darker means more expensive. Read it left to right, like a receipt.</p>
+    <div id="calendar"></div>
+    <div class="legend">
+      <span>Less</span>
+      <span class="cell" data-l="0"></span>
+      <span class="cell" data-l="1"></span>
+      <span class="cell" data-l="2"></span>
+      <span class="cell" data-l="3"></span>
+      <span class="cell" data-l="4"></span>
+      <span>More</span>
+    </div>
+  </div>
+
+  <div class="grid-2">
+    <div class="panel">
+      <h2>Cost by service</h2>
+      <p class="desc">Share of total spend, this period.</p>
+      <div id="svcList"></div>
+    </div>
+    <div class="panel">
+      <h2>Service mix</h2>
+      <p class="desc">Same data, at a glance.</p>
+      <div class="chart-box" style="height:260px;"><canvas id="mixChart"></canvas></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>What this data suggests</h2>
+    <p class="desc">Plain-language takeaways generated from the numbers above — a starting point, not a substitute for reviewing actual resources.</p>
+    <div class="recs" id="recs"></div>
+  </div>
+
+  <footer>
+    <b>How this works:</b> EventBridge triggers a Lambda function daily → Lambda calls the Cost Explorer API →
+    writes one CSV per day to S3 (<code>raw/YYYY-MM-DD.csv</code>) plus a <code>manifest.json</code> index →
+    this page (served over HTTPS via CloudFront, with the S3 bucket kept private behind an Origin Access Control)
+    fetches the manifest, pulls each CSV client-side, and renders everything below. No server, no database, no public bucket.
+  </footer>
+
+</div>
+
+<script>
+const AMBER = '#E8A33D', TEAL = '#3DDC97', MUTED = '#8A93A6', BORDER='#22304B';
+
+const money = n => '$' + n.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
+
+// ---- Theme toggle ----
+(function(){
+  const saved = localStorage.getItem('ledger-theme');
+  const initial = saved || 'dark';
+  document.documentElement.setAttribute('data-theme', initial);
+  const btn = document.getElementById('themeToggle');
+  const label = document.getElementById('themeLabel');
+  function sync(){
+    const current = document.documentElement.getAttribute('data-theme');
+    label.textContent = current === 'light' ? 'Light' : 'Dark';
+  }
+  sync();
+  btn.addEventListener('click', () => {
+    const current = document.documentElement.getAttribute('data-theme');
+    const next = current === 'light' ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-theme', next);
+    localStorage.setItem('ledger-theme', next);
+    sync();
+  });
+})();
+
+async function loadCSV(path){
+  const res = await fetch(path);
+  if(!res.ok) throw new Error('missing ' + path);
+  const text = await res.text();
+  const lines = text.trim().split('\n').slice(1); // skip header
+  const rows = lines.map(l => {
+    const parts = l.split(',');
+    return { service: parts[0], cost: parseFloat(parts[1]) };
+  });
+  return rows;
+}
+
+// Demo fallback data so the dashboard renders even before real files exist / for local preview
+function demoData(){
+  const services = ['Amazon EC2','Amazon S3','AWS Lambda','Amazon CloudFront','Amazon RDS','Amazon DynamoDB','AWS Data Transfer'];
+  const days = [];
+  const today = new Date();
+  for(let i=45;i>=0;i--){
+    const d = new Date(today); d.setDate(d.getDate()-i);
+    days.push(d.toISOString().slice(0,10));
+  }
+  return days.map(day => ({
+    date: day,
+    rows: services.map(s => ({service:s, cost: +(Math.random()*4+0.4).toFixed(2)}))
+  }));
+}
+
+async function loadData(){
+  try{
+    const manifestRes = await fetch('raw/manifest.json');
+    if(!manifestRes.ok) throw new Error('no manifest');
+    const dates = (await manifestRes.json()).sort();
+    const results = [];
+    for(const date of dates){
+      try{
+        const rows = (await loadCSV('raw/' + date + '.csv')).filter(r => r.service !== 'Total');
+        results.push({date, rows});
+      }catch(e){ /* skip missing day */ }
+    }
+    document.getElementById('status').textContent = 'Live · ' + results.length + ' days loaded from S3';
+    return results;
+  }catch(e){
+    document.getElementById('status').textContent = 'Preview mode · showing sample data (connect S3 manifest.json for live figures)';
+    return demoData();
+  }
+}
+
+function render(data){
+  if(!data.length) return;
+
+  const dailyTotals = data.map(d => ({ date:d.date, total: d.rows.reduce((s,r)=>s+r.cost,0) }));
+  const grandTotal = dailyTotals.reduce((s,d)=>s+d.total,0);
+  const avg = grandTotal / dailyTotals.length;
+  const peak = dailyTotals.reduce((a,b)=> b.total>a.total ? b : a);
+
+  const svcTotals = {};
+  data.forEach(d => d.rows.forEach(r => { svcTotals[r.service] = (svcTotals[r.service]||0) + r.cost; }));
+  const svcSorted = Object.entries(svcTotals).sort((a,b)=>b[1]-a[1]);
+  const topSvc = svcSorted[0];
+
+  document.getElementById('kpi-total').textContent = money(grandTotal);
+  document.getElementById('kpi-range').textContent = dailyTotals[0].date + ' → ' + dailyTotals[dailyTotals.length-1].date;
+  document.getElementById('kpi-avg').textContent = money(avg);
+  document.getElementById('kpi-peak').textContent = money(peak.total);
+  document.getElementById('kpi-peak-date').textContent = peak.date;
+  document.getElementById('kpi-top-svc').textContent = topSvc[0];
+  document.getElementById('kpi-top-svc-pct').textContent = ((topSvc[1]/grandTotal)*100).toFixed(1) + '% of total';
+
+  // Trend chart
+  new Chart(document.getElementById('trendChart'), {
+    type:'line',
+    data:{
+      labels: dailyTotals.map(d=>d.date.slice(5)),
+      datasets:[{
+        data: dailyTotals.map(d=>d.total),
+        borderColor: AMBER,
+        backgroundColor: 'rgba(232,163,61,0.12)',
+        fill:true, tension:0.35, pointRadius:0, borderWidth:2
+      }]
+    },
+    options:{
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:MUTED,maxTicksLimit:10},grid:{color:BORDER}},
+        y:{ticks:{color:MUTED,callback:v=>'$'+v},grid:{color:BORDER}}
+      }
+    }
+  });
+
+  // Mix chart (donut)
+  new Chart(document.getElementById('mixChart'), {
+    type:'doughnut',
+    data:{
+      labels: svcSorted.slice(0,6).map(s=>s[0]),
+      datasets:[{
+        data: svcSorted.slice(0,6).map(s=>s[1]),
+        backgroundColor:['#E8A33D','#3DDC97','#5B8DEF','#E8573D','#B589E8','#89C4E8'],
+        borderColor: '#121B2E', borderWidth:2
+      }]
+    },
+    options:{
+      plugins:{legend:{position:'bottom',labels:{color:MUTED,boxWidth:10,font:{size:11}}}}
+    }
+  });
+
+  // Service list bars
+  const svcList = document.getElementById('svcList');
+  const max = svcSorted[0][1];
+  svcList.innerHTML = svcSorted.map(([name,val]) => `
+    <div class="svc-row">
+      <div class="svc-name">${name}</div>
+      <div class="svc-bar-track"><div class="svc-bar-fill" style="width:${(val/max*100).toFixed(1)}%"></div></div>
+      <div class="svc-amt">${money(val)}</div>
+    </div>`).join('');
+
+  // Spend calendar heatmap
+  const cal = document.getElementById('calendar');
+  const maxDay = Math.max(...dailyTotals.map(d=>d.total));
+  cal.innerHTML = dailyTotals.map(d => {
+    const level = maxDay ? Math.min(4, Math.floor((d.total/maxDay)*4.999)) : 0;
+    const opacity = [0.12,0.32,0.52,0.72,1][level];
+    return `<div class="cell" title="${d.date}: ${money(d.total)}" style="background:rgba(232,163,61,${opacity});border-color:rgba(232,163,61,${Math.max(0.15,opacity*0.6)})"></div>`;
+  }).join('');
+  document.querySelectorAll('.legend .cell').forEach(el=>{
+    const l = +el.dataset.l;
+    const opacity = [0.12,0.32,0.52,0.72,1][l];
+    el.style.background = `rgba(232,163,61,${opacity})`;
+  });
+
+  renderRecommendations(dailyTotals, svcSorted, grandTotal, avg, peak);
+}
+
+// ---- Plain-language recommendations, generated from the data itself ----
+const SERVICE_TIPS = {
+  'Amazon EC2':'Check for idle or oversized instances, and compare On-Demand pricing against Savings Plans or Reserved Instances.',
+  'Amazon RDS':'If usage is steady day to day, Reserved Instances or Aurora Serverless can meaningfully reduce database costs.',
+  'Amazon S3':'Add lifecycle rules to automatically move older, rarely-accessed objects to Infrequent Access or Glacier.',
+  'AWS Data Transfer':'Cross-region and internet egress traffic is often avoidable — check if resources can be moved closer together.',
+  'Amazon DynamoDB':'Tables with predictable traffic usually cost less on provisioned or reserved capacity than on-demand.',
+  'Amazon CloudFront':'Typically cheap relative to origin costs — usually not a priority for optimization.',
+  'AWS Lambda':'Cost scales with invocations and memory × duration — check for retries, loops, or oversized memory settings.'
+};
+
+function renderRecommendations(dailyTotals, svcSorted, grandTotal, avg, peak){
+  const recs = [];
+  const half = Math.floor(dailyTotals.length / 2);
+
+  if(dailyTotals.length >= 6){
+    const firstAvg = dailyTotals.slice(0, half).reduce((s,d)=>s+d.total,0) / half;
+    const secondAvg = dailyTotals.slice(half).reduce((s,d)=>s+d.total,0) / (dailyTotals.length - half);
+    const delta = ((secondAvg - firstAvg) / firstAvg) * 100;
+
+    if(delta > 12){
+      recs.push({type:'warning', tag:'Cost trend', title:'Spend is trending upward',
+        desc:`The daily average rose about ${delta.toFixed(0)}% from the first half of this period to the second. Worth checking what changed — new resources, higher traffic, or something left running.`});
+    } else if(delta < -12){
+      recs.push({type:'good', tag:'Cost trend', title:'Spend is trending down',
+        desc:`Daily average fell about ${Math.abs(delta).toFixed(0)}% across the period — whatever changed recently is working in your favor.`});
+    } else {
+      recs.push({type:'info', tag:'Cost trend', title:'Spend is holding steady',
+        desc:`Daily costs have stayed within a normal range over the period, with no major upward or downward trend.`});
+    }
+  }
+
+  const topSvc = svcSorted[0];
+  const topShare = (topSvc[1] / grandTotal) * 100;
+  if(topShare > 35){
+    recs.push({type:'warning', tag:'Concentration', title:`${topSvc[0]} dominates the bill`,
+      desc:`It accounts for ${topShare.toFixed(0)}% of total spend in this period — the single highest-leverage place to look for savings.`});
+  } else {
+    recs.push({type:'info', tag:'Concentration', title:'Spend is fairly distributed',
+      desc:`No single service accounts for more than ${Math.ceil(topShare)}% of the bill, so savings will likely come from small changes across several services rather than one big fix.`});
+  }
+
+  if(peak.total > avg * 1.4){
+    recs.push({type:'warning', tag:'Anomaly', title:'A cost spike stands out',
+      desc:`${peak.date} cost ${money(peak.total)}, well above the ${money(avg)} daily average — worth a quick look at what ran that day.`});
+  }
+
+  svcSorted.slice(0, 3).forEach(([name]) => {
+    if(SERVICE_TIPS[name]){
+      recs.push({type:'tip', tag:'Optimization tip', title:`For ${name}`, desc:SERVICE_TIPS[name]});
+    }
+  });
+
+  const el = document.getElementById('recs');
+  el.innerHTML = recs.slice(0,6).map(r => `
+    <div class="rec-card ${r.type}">
+      <div class="rec-tag">${r.tag}</div>
+      <div class="rec-title">${r.title}</div>
+      <div class="rec-desc">${r.desc}</div>
+    </div>`).join('');
+}
+
+loadData().then(render);
+</script>
+</body>
+</html>
