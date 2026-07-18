@@ -2,7 +2,7 @@
 
 A serverless AWS billing dashboard that turns raw Cost Explorer data into something a **non-technical stakeholder** can actually read — no console login, no jargon, just a clear daily view of what's being spent and where.
 
-**Live demo:** `https://cost-ledger.yourdomain.com` *(update once your subdomain is live)*
+**Live demo:** `https://finops-ledger.nerdyll.site/` 
 
 ---
 
@@ -43,7 +43,7 @@ flowchart LR
 | Layer | Service | Why |
 |---|---|---|
 | Scheduling | EventBridge Scheduler | Managed cron, no server to maintain |
-| Compute | AWS Lambda (Python 3.12) | Runs for ~2 seconds/day; comfortably free-tier |
+| Compute | AWS Lambda (Python 3.14) | Runs for ~2 seconds/day; comfortably free-tier |
 | Data source | Cost Explorer API | Authoritative source for AWS billing data |
 | Storage | S3 | Cheap, durable, versioned CSV + JSON storage |
 | Delivery | CloudFront + OAC | HTTPS, caching, and a private origin bucket |
